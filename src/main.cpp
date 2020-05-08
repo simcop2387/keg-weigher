@@ -26,21 +26,43 @@
 
 HX711 scale;
 
-double reading;
+const int averages = 4;
 
-long zero_factor_ch_a = -96400;
+long zero_factor_ch_a = -70000;
+long zero_factor_ch_b = -30000;
 
-float calibration_ch_a = -20.0 * 0.35274 / 16.0f;
-float calibration_ch_b = -40.0f * 0.35274 / 16.0f; // Guess
+float calibration_ch_a = -171.75f / (0.35274f / 16.0f);
+float calibration_ch_b = -400.0f / (0.35274f / 16.0f); // Guess
+
+float keg_base_ch_a = 15.5f;
+float keg_base_ch_b = 15.5f;
+
+float reading_ch_a = 0.0;
+float reading_ch_b = 0.0;
+float water_ch_a = 0.0;
+float water_ch_b = 0.0;
+long  raw_ch_a = 0;
+long  raw_ch_b = 0;
 
 void get_readings() {
-  
-}
+  // Get the readings
+  scale.set_gain(128);
+  raw_ch_a = scale.read_average(averages);
+  scale.set_gain(32);
+  raw_ch_b = scale.read_average(averages);
 
-float calibration_factor = -20; //-7050 worked for my 440lb max scale setup
-float units;
-float ounces;
-float lbs;
+  // Scale appropriately
+  reading_ch_b = ((float) raw_ch_b - zero_factor_ch_b) / calibration_ch_b;
+  reading_ch_a = ((float) raw_ch_a - zero_factor_ch_a) / calibration_ch_a;
+  
+  // Calculate water weight
+  water_ch_a = reading_ch_a - keg_base_ch_a;
+  water_ch_a = water_ch_a > 0.0 ? water_ch_a : 0.0;
+
+  water_ch_b = reading_ch_b - keg_base_ch_b;
+  water_ch_b = water_ch_b > 0.0 ? water_ch_b : 0.0;
+
+}
 
 void setup() {
   Serial.begin(9600);
@@ -52,35 +74,25 @@ void setup() {
   Serial.println("Press - or z to decrease calibration factor");
 
   scale.begin(DOUT, CLK);
-
-  scale.set_scale();
-  scale.tare();	//Reset the scale to 0
-  scale.set_offset(zero_factor);
+  scale.tare();
+  scale.set_offset(zero_factor_ch_a);
 }
 
 void loop() {
-  delay(100);
-  scale.set_scale(calibration_factor); //Adjust to this calibration factor
+  get_readings();
 
-  Serial.print("Reading: ");
-  units = scale.get_units(4);
-//  if (units < 0) {
-//    units = 0.00;
-//  }
-
-  Serial.print(lbs, 3);
-  Serial.print("lbs ");
-  Serial.print(ounces, 3); 
-  Serial.print("oz cf: ");
-  Serial.print(calibration_factor);
+  Serial.print("Readings: ");
+  Serial.print(reading_ch_a);
+  Serial.print(" lbs, ");
+  Serial.print(reading_ch_b);
+  Serial.print(" lbs.  water: ");
+  Serial.print(water_ch_a);
+  Serial.print(" lbs, ");
+  Serial.print(water_ch_b);
+  Serial.print("lbs  Raw: ");
+  Serial.print(raw_ch_a);
+  Serial.print(", ");
+  Serial.print(raw_ch_b);
   Serial.println();
 
-  if(Serial.available())
-  {
-    char temp = Serial.read();
-    if(temp == '+' || temp == 'a')
-      calibration_factor += 1;
-    else if(temp == '-' || temp == 'z')
-      calibration_factor -= 1;
-  }
 }
